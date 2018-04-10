@@ -33,6 +33,7 @@ class RawScreenshotCompareContext extends RawMinkContext implements ScreenshotCo
      * @param $fileName
      * @throws \LogicException
      * @throws \ImagickException
+     * @throws \Cevou\Behat\ScreenshotCompareExtension\Context\ScreenshotCompareException
      * @throws \Symfony\Component\Filesystem\Exception\FileNotFoundException
      */
     public function compareScreenshot($sessionName, $fileName)
@@ -49,16 +50,23 @@ class RawScreenshotCompareContext extends RawMinkContext implements ScreenshotCo
         /** @var GaufretteFilesystem $targetFilesystem */
         $targetFilesystem = $configuration['adapter'];
 
+        $actualScreenshot = new \Imagick();
+        $actualScreenshot->readImageBlob($session->getScreenshot());
+
         $screenshotDir = $this->screenshotCompareParameters['screenshot_dir'];
         $compareFile = $screenshotDir . DIRECTORY_SEPARATOR . $fileName;
         $sourceFilesystem = new SymfonyFilesystem();
 
-        if (!$sourceFilesystem->exists($compareFile)) {
+        if (!$sourceFilesystem->exists($compareFile)){
+          if ($this->screenshotCompareParameters['autocreate']) {
+            $sourceFilesystem->dumpFile($compareFile, $actualScreenshot);
+            return;
+          }
+          else {
             throw new FileNotFoundException(null, 0, null, $compareFile);
+          }
         }
 
-        $actualScreenshot = new \Imagick();
-        $actualScreenshot->readImageBlob($session->getScreenshot());
         $actualGeometry = $actualScreenshot->getImageGeometry();
 
         //Crop the image according to the settings
@@ -83,14 +91,14 @@ class RawScreenshotCompareContext extends RawMinkContext implements ScreenshotCo
         $result = $actualScreenshot->compareImages($compareScreenshot, \Imagick::METRIC_ROOTMEANSQUAREDERROR);
 
         if ($result[1] > 0) {
-            $diffFileName = sprintf('%s_%s.%s', $this->getMinkParameter('browser_name'), date('d-m-y-H-i-s'), 'png');
+            $diffFileName = sprintf('%s_%s', $this->getMinkParameter('browser_name'), $fileName);
 
             /** @var \Imagick $diffScreenshot */
             $diffScreenshot = $result[0];
             $diffScreenshot->setImageFormat("png");
+            $targetFilesystem->delete($diffFileName);
             $targetFilesystem->write($diffFileName, $diffScreenshot);
-
-            throw new \ImagickException(sprintf("Files are not equal. Diff saved to %s", $diffFileName));
+            throw new ScreenshotCompareException($diffFileName, sprintf("Files are not equal. Diff saved to %s", $diffFileName));
         }
     }
 }

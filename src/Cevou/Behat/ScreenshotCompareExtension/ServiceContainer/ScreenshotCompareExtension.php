@@ -62,6 +62,7 @@ class ScreenshotCompareExtension implements ExtensionInterface
             ->addDefaultsIfNotSet()
             ->children()
                 ->scalarNode('screenshot_dir')->defaultValue('%paths.base%/features/screenshots')->end()
+                ->booleanNode('autocreate')->defaultValue(false)->end()
             ->end()
         ->end();
 
