@@ -63,6 +63,13 @@ class ScreenshotCompareExtension implements ExtensionInterface
             ->children()
                 ->scalarNode('screenshot_dir')->defaultValue('%paths.base%/features/screenshots')->end()
                 ->booleanNode('autocreate')->defaultValue(false)->end()
+                ->arrayNode('selectors')->defaultValue([])
+                  ->useAttributeAsKey('name')
+                  ->prototype('array')
+                  ->performNoDeepMerging()
+                  ->children()
+                    ->scalarNode('name')->end()
+                    ->scalarNode('selector')->end()
             ->end()
         ->end();
 

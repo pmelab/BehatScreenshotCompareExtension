@@ -12,6 +12,9 @@ class RawScreenshotCompareContext extends RawMinkContext implements ScreenshotCo
     private $screenshotCompareConfigurations;
     private $screenshotCompareParameters;
 
+    protected $currentSelector = FALSE;
+    protected $ignoredSelectors = [];
+
     /**
      * {@inheritdoc}
      */
@@ -28,6 +31,10 @@ class RawScreenshotCompareContext extends RawMinkContext implements ScreenshotCo
         $this->screenshotCompareParameters = $parameters;
     }
 
+    protected function translateSelector($selector) {
+      return array_key_exists($selector, $this->screenshotCompareParameters['selectors']) ? $this->screenshotCompareParameters['selectors'][$selector]['selector'] : $selector;
+    }
+
     /**
      * @param $sessionName
      * @param $fileName
@@ -36,7 +43,7 @@ class RawScreenshotCompareContext extends RawMinkContext implements ScreenshotCo
      * @throws \Cevou\Behat\ScreenshotCompareExtension\Context\ScreenshotCompareException
      * @throws \Symfony\Component\Filesystem\Exception\FileNotFoundException
      */
-    public function compareScreenshot($sessionName, $fileName)
+    public function compareScreenshot($sessionName, $fileName, $fullscreen = TRUE, $scrollTop = 0, $selector = FALSE)
     {
         $this->assertSession($sessionName);
 
@@ -50,12 +57,51 @@ class RawScreenshotCompareContext extends RawMinkContext implements ScreenshotCo
         /** @var GaufretteFilesystem $targetFilesystem */
         $targetFilesystem = $configuration['adapter'];
 
+        if ($this->ignoredSelectors) {
+          foreach ($this->ignoredSelectors as $selector) {
+            $selector = $this->translateSelector($selector);
+            $session->executeScript("document.querySelectorAll('$selector').forEach(function (el) { el.remove() });");
+          }
+        }
+
+        // When taking full screen screenshots, resize the window to show
+        // everything. This might not work on all devices.
+        if ($fullscreen) {
+          $bodyWidth = (int) $session->evaluateScript("document.documentElement.offsetWidth");
+          $bodyHeight = (int) $session->evaluateScript("document.documentElement.offsetHeight");
+
+          $innerWidth = (int) $session->evaluateScript('window.innerWidth');
+          $innerHeight = (int) $session->evaluateScript('window.innerHeight');
+
+          $outerWidth = (int) $session->evaluateScript('window.outerWidth');
+          $outerHeight = (int) $session->evaluateScript('window.outerHeight');
+
+          $width = $outerWidth + ($bodyWidth - $innerWidth);
+          $height = $outerHeight + ($bodyHeight - $innerHeight);
+
+          $session->resizeWindow($width, $height);
+        }
+
         $actualScreenshot = new \Imagick();
         $actualScreenshot->readImageBlob($session->getScreenshot());
 
         $screenshotDir = $this->screenshotCompareParameters['screenshot_dir'];
         $compareFile = $screenshotDir . DIRECTORY_SEPARATOR . $fileName;
         $sourceFilesystem = new SymfonyFilesystem();
+
+        $actualGeometry = $actualScreenshot->getImageGeometry();
+
+        //Crop the image according to the settings
+        if ($selector = $this->currentSelector) {
+          $selector = $this->translateSelector($selector);
+          $top = (int) $session->evaluateScript("document.querySelector('$selector').getBoundingClientRect().top");
+          $left = (int) $session->evaluateScript("document.querySelector('$selector').getBoundingClientRect().left");
+          $width = (int) $session->evaluateScript("document.querySelector('$selector').getBoundingClientRect().width");
+          $height = (int) $session->evaluateScript("document.querySelector('$selector').getBoundingClientRect().height");
+          $actualScreenshot->cropImage($width, $height, $left, $top);
+          //Refresh geomerty information
+          $actualGeometry = $actualScreenshot->getImageGeometry();
+        }
 
         if (!$sourceFilesystem->exists($compareFile)){
           if ($this->screenshotCompareParameters['autocreate']) {
@@ -65,19 +111,6 @@ class RawScreenshotCompareContext extends RawMinkContext implements ScreenshotCo
           else {
             throw new FileNotFoundException(null, 0, null, $compareFile);
           }
-        }
-
-        $actualGeometry = $actualScreenshot->getImageGeometry();
-
-        //Crop the image according to the settings
-        if (array_key_exists('crop', $configuration)) {
-            $crop = $configuration['crop'];
-            $cropWidth = $actualGeometry['width'] - $crop['right']- $crop['left'];
-            $cropHeight = $actualGeometry['height'] - $crop['top'] - $crop['bottom'];
-            $actualScreenshot->cropImage($cropWidth, $cropHeight,$crop['left'],$crop['top']);
-
-            //Refresh geomerty information
-            $actualGeometry = $actualScreenshot->getImageGeometry();
         }
 
         $compareScreenshot = new \Imagick($compareFile);
