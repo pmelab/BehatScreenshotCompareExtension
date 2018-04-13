@@ -129,7 +129,9 @@ class RawScreenshotCompareContext extends RawMinkContext implements ScreenshotCo
             /** @var \Imagick $diffScreenshot */
             $diffScreenshot = $result[0];
             $diffScreenshot->setImageFormat("png");
-            $targetFilesystem->delete($diffFileName);
+            if ($targetFilesystem->has($diffFileName)) {
+              $targetFilesystem->delete($diffFileName);
+            }
             $targetFilesystem->write($diffFileName, $diffScreenshot);
             throw new ScreenshotCompareException($diffFileName, sprintf("Files are not equal. Diff saved to %s", $diffFileName));
         }
