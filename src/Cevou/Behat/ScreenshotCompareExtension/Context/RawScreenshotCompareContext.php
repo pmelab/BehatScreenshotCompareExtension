@@ -60,7 +60,7 @@ class RawScreenshotCompareContext extends RawMinkContext implements ScreenshotCo
         if ($this->ignoredSelectors) {
           foreach ($this->ignoredSelectors as $selector) {
             $selector = $this->translateSelector($selector);
-            $session->executeScript("document.querySelectorAll('$selector').forEach(function (el) { el.remove() });");
+            $session->executeScript("var e = document.querySelectorAll('$selector'); for (i = 0; i < e.length; i++) { e[i].parentNode.removeChild(e[i]) };");
           }
         }
 
