@@ -2,6 +2,10 @@
 
 namespace Cevou\Behat\ScreenshotCompareExtension\Context;
 
+use Behat\Behat\Hook\Scope\AfterStepScope;
+use Behat\Mink\Driver\Selenium2Driver;
+use Behat\Mink\Exception\UnsupportedDriverActionException;
+
 class ScreenshotCompareContext extends RawScreenshotCompareContext {
 
   /**
@@ -25,6 +29,27 @@ class ScreenshotCompareContext extends RawScreenshotCompareContext {
    */
   public function iIgnore($selector) {
     $this->ignoredSelectors[] = $selector;
+  }
+
+
+  /**
+   * Take screenshot when step fails.
+   *
+   * @AfterStep
+   */
+  public function takeScreenshotAfterFailedStep(AfterStepScope $event)
+  {
+    $sessionName = $this->getMink()->getDefaultSessionName();
+    if (!$this->getSession($sessionName)->getDriver() instanceof Selenium2Driver) {
+      return;
+    }
+
+    if (!$event->getTestResult()->isPassed() && $this->getSession()) {
+      $filename = $event->getFeature()->getFile() . '.' . $event->getStep()->getLine() . '.png';
+      $exception = $event->getTestResult()->getCallResult()->getException();
+      $this->takeFullPageScreenshot($sessionName, $filename);
+      $exception->diffScreenshot = $filename;
+    }
   }
 
 }

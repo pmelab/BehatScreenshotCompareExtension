@@ -43,7 +43,7 @@ class RawScreenshotCompareContext extends RawMinkContext implements ScreenshotCo
      * @throws \Cevou\Behat\ScreenshotCompareExtension\Context\ScreenshotCompareException
      * @throws \Symfony\Component\Filesystem\Exception\FileNotFoundException
      */
-    public function compareScreenshot($sessionName, $fileName, $fullscreen = TRUE, $scrollTop = 0, $selector = FALSE)
+    public function compareScreenshot($sessionName, $fileName, $fullscreen = TRUE, $scrollTop = 0)
     {
         $this->assertSession($sessionName);
 
@@ -136,4 +136,37 @@ class RawScreenshotCompareContext extends RawMinkContext implements ScreenshotCo
             throw new ScreenshotCompareException($diffFileName, sprintf("Files are not equal. Diff saved to %s", $diffFileName));
         }
     }
+
+    protected function takeFullPageScreenshot($sessionName, $fileName, $fullscreen = TRUE, $scrollTop = 0) {
+      $session = $this->getSession($sessionName);
+
+      $configuration = $this->screenshotCompareConfigurations[$sessionName];
+      /** @var GaufretteFilesystem $targetFilesystem */
+      $targetFilesystem = $configuration['adapter'];
+
+      // When taking full screen screenshots, resize the window to show
+      // everything. This might not work on all devices.
+      $bodyWidth = (int) $session->evaluateScript("document.documentElement.offsetWidth");
+      $bodyHeight = (int) $session->evaluateScript("document.documentElement.offsetHeight");
+
+      $innerWidth = (int) $session->evaluateScript('window.innerWidth');
+      $innerHeight = (int) $session->evaluateScript('window.innerHeight');
+
+      $outerWidth = (int) $session->evaluateScript('window.outerWidth');
+      $outerHeight = (int) $session->evaluateScript('window.outerHeight');
+
+      $width = $outerWidth + ($bodyWidth - $innerWidth);
+      $height = $outerHeight + ($bodyHeight - $innerHeight);
+
+      $session->resizeWindow($width, $height);
+
+      $actualScreenshot = new \Imagick();
+      $actualScreenshot->readImageBlob($session->getScreenshot());
+
+      if ($targetFilesystem->has($fileName)) {
+        $targetFilesystem->delete($fileName);
+      }
+      $targetFilesystem->write($fileName, $actualScreenshot);
+    }
+
 }
